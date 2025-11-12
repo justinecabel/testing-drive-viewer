@@ -56,10 +56,8 @@
 
 
     <script>
-        // ---------------------------------------------------------------
-        // TODO: PASTE YOUR WEB APP URL HERE WHEN YOU ARE READY
-        // ---------------------------------------------------------------
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyiXUwUdPyutspfHEgZa2ncnxMHQccdX3sBKKV1hn0zkAv4EASBXVjZ6G05Pxe0huKnMw/exec";
+
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwq0mGmYDjb9CeL3XR3sOylMMTBmXwebqU84ma2mFzp2PbXW2Ui2Orgmb6j8QDaBLOIOA/exec";
 
 
         // Get references to the HTML elements
@@ -90,60 +88,54 @@
             statusDisplay.style.display = 'none'; // Hide status message
         }
 
-        // --- DEVELOPMENT / TEST FUNCTION ---
         /**
-         * Loads fake images for local testing.
-         */
-        // function loadGalleryForTesting() {
-        //     console.log("Running in TEST mode.");
-        //     statusDisplay.innerText = "Loading test images...";
-            
-        //     const testImages = [
-        //         'https://picsum.photos/250/250?random=1',
-        //         'https://picsum.photos/250/250?random=2',
-        //         'https://picsum.photos/250/250?random=3',
-        //         'https://picsum.photos/250/250?random=4',
-        //         'https://picsum.photos/250/250?random=5',
-        //         'https://picsum.photos/250/250?random=6'
-        //     ];
-            
-        //     // Simulate a small delay, like a real network request
-        //     setTimeout(() => {
-        //         buildGallery(testImages);
-        //     }, 500);
-        // }
-
-        // --- "LIVE" / PRODUCTION FUNCTION ---
-        /**
-         * Fetches image IDs from your Google Apps Script
+         * Load from Google Apps Script using JSONP to avoid CORS/CORB.
+         * The Apps Script must support a `callback` query parameter and return
+         * JavaScript calling that callback with the JSON payload (see gs.gs).
          */
         function loadGalleryFromGoogle() {
-            console.log("Running in LIVE mode.");
+            console.log("Running in LIVE mode (JSONP)");
             statusDisplay.innerText = "Loading images from Google Drive...";
-            
-            fetch(WEB_APP_URL)
-                .then(response => response.json())
-                .then(imageIds => {
-                    // Convert Google Drive IDs into usable image URLs
-                    const imageSources = imageIds.map(id => 'https://drive.google.com/drive-viewer/' + id);
-                    buildGallery(imageSources);
-                })
-                .catch(error => {
-                    console.error('Error fetching gallery:', error);
-                    statusDisplay.innerText = "Error loading gallery. Check console for details.";
-                });
+
+            const callbackName = 'driveGalleryCallback_' + Math.floor(Math.random() * 1e9);
+
+            // Create the global callback
+            window[callbackName] = function(imageIdsOrError) {
+                try {
+                    if (!imageIdsOrError) {
+                        statusDisplay.innerText = "No response or empty payload.";
+                        return;
+                    }
+                    if (Array.isArray(imageIdsOrError)) {
+                        const imageSources = imageIdsOrError.map(id => 'https://drive.usercontent.google.com/download?id=' + id + '&export=view&authuser=0');
+                        buildGallery(imageSources);
+                    } else if (imageIdsOrError.error) {
+                        console.error('Server error:', imageIdsOrError);
+                        statusDisplay.innerText = 'Server error: ' + (imageIdsOrError.error || 'unknown');
+                    } else {
+                        console.warn('Unexpected response format', imageIdsOrError);
+                        statusDisplay.innerText = 'Unexpected response format. Check console.';
+                    }
+                } finally {
+                    // cleanup
+                    try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+                    const s = document.getElementById(callbackName + '_script'); if (s) s.remove();
+                }
+            };
+
+            // Inject script tag
+            const script = document.createElement('script');
+            script.id = callbackName + '_script';
+            script.src = WEB_APP_URL + (WEB_APP_URL.indexOf('?') === -1 ? '?' : '&') + 'callback=' + callbackName + '&_=' + Date.now();
+            script.onerror = function(e) {
+                console.error('Failed to load JSONP script', e);
+                statusDisplay.innerText = 'Failed to load gallery script. Check console.';
+                try { delete window[callbackName]; } catch (err) { window[callbackName] = undefined; }
+                script.remove();
+            };
+            document.body.appendChild(script);
         }
 
-
-        // ---------------------------------------------------------------
-        // --- CHOOSE WHICH MODE TO RUN ---
-        // ---------------------------------------------------------------
-        
-        // On page load, run in TEST mode
-        // window.onload = loadGalleryForTesting;
-
-        // TODO: When you're ready to go live,
-        // comment out the line above and uncomment the line below.
         
         window.onload = loadGalleryFromGoogle;
         
