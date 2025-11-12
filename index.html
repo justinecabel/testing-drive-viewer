@@ -59,7 +59,7 @@
         // ---------------------------------------------------------------
         // TODO: PASTE YOUR WEB APP URL HERE WHEN YOU ARE READY
         // ---------------------------------------------------------------
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby3oGPTUFVqnOTn1Vtl2Dsa2iTHEYkvlZ3tsAfnRuqfa0WlKcy4Mm5HBVYKDbcixpHuaw/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZ317tI8ZX1sZO99KOZ-JqWOMNaO13RYZv0kOkxWsjbPTYN33dehNp-yQK1ry-qE8A9Q/exec";
 
 
         // Get references to the HTML elements
@@ -125,7 +125,7 @@
                 .then(response => response.json())
                 .then(imageIds => {
                     // Convert Google Drive IDs into usable image URLs
-                    const imageSources = imageIds.map(id => 'https://drive.google.com/uc?id=' + id);
+                    const imageSources = imageIds.map(id => 'https://drive.google.com/drive-viewer/' + id);
                     buildGallery(imageSources);
                 })
                 .catch(error => {
