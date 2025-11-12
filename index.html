@@ -2,9 +2,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8        #modal-image-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: calc(100vw - 40px);
+            height: calc(100vh - 100px);
+            overflow: hidden;
+            margin: 20px;
+            border-radius: 8px;
+        }ta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Gallery (Test Mode)</title>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         body {
@@ -44,6 +56,117 @@
             padding-top: 40px;
             color: #555;
         }
+
+        /* Modal styles */
+        #modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        #modal.active {
+            display: flex;
+        }
+
+        #modal-image-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 80vw;
+            height: 90vh;
+            overflow: hidden;
+            margin-bottom: 0;
+            border-radius: 8px;
+        }
+
+        #modal-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+
+        #magnifier-box {
+            display: none;
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            border: 2px solid #007bff;
+            background-size: 400% 400%;
+            background-position: center;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+            pointer-events: none;
+            z-index: 1001;
+        }
+
+        #magnifier-box.active {
+            display: block;
+        }
+
+        #modal-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .modal-btn:hover {
+            background: #0056b3;
+            transform: scale(1.1);
+        }
+
+        .modal-btn.close {
+            background: #dc3545;
+        }
+
+        .modal-btn.close:hover {
+            background: #c82333;
+        }
+
+        #zoom-level {
+            color: white;
+            font-size: 14px;
+            min-width: 45px;
+            text-align: center;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 25px;
+            background: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -54,10 +177,19 @@
     
     <div id="gallery"></div>
 
+    <!-- Modal for zoomed image view -->
+    <div id="modal">
+        <div id="modal-image-container">
+            <img id="modal-image" src="" alt="Zoomed image">
+        </div>
+        <div id="magnifier-box"></div>
+        <button class="modal-btn close" id="close-modal-btn" title="Close (Esc)"><i class="fas fa-times"></i></button>
+    </div>
+
 
     <script>
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwq0mGmYDjb9CeL3XR3sOylMMTBmXwebqU84ma2mFzp2PbXW2Ui2Orgmb6j8QDaBLOIOA/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz9bO8S6zdi_s3onWAkUsGj85PMshvEXJ5-uTQLtgkZeftEnz39EIzzhVccLEgunnys-Q/exec";
 
 
         // Get references to the HTML elements
@@ -77,63 +209,153 @@
             // Clear the gallery first
             galleryContainer.innerHTML = '';
             
-            // Loop through each source and create an <img> tag
+            // Loop through each source and create an <img> tag with lazy loading
             imageSources.forEach(src => {
                 let img = document.createElement('img');
                 img.src = src;
                 img.alt = 'Gallery image';
+                img.loading = 'lazy';
+                img.addEventListener('click', () => openModal(src));
                 galleryContainer.appendChild(img);
             });
             
             statusDisplay.style.display = 'none'; // Hide status message
         }
 
-        /**
-         * Load from Google Apps Script using JSONP to avoid CORS/CORB.
-         * The Apps Script must support a `callback` query parameter and return
-         * JavaScript calling that callback with the JSON payload (see gs.gs).
-         */
+        // Modal and zoom functionality
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modal-image');
+        const modalContainer = document.getElementById('modal-image-container');
+        const magnifierBox = document.getElementById('magnifier-box');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+
+        function openModal(src) {
+            modalImage.src = src;
+            modal.classList.add('active');
+            setupMagnifier();
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            magnifierBox.classList.remove('active');
+        }
+
+        function setupMagnifier() {
+            modalImage.addEventListener('mousemove', showMagnifier);
+            modalImage.addEventListener('mouseenter', () => magnifierBox.classList.add('active'));
+            modalImage.addEventListener('mouseleave', () => magnifierBox.classList.remove('active'));
+        }
+
+        function showMagnifier(e) {
+            const rect = modalImage.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Only show magnifier if mouse is over the image
+            if (x < 0 || x > rect.width || y < 0 || y > rect.height) {
+                magnifierBox.classList.remove('active');
+                return;
+            }
+
+            magnifierBox.classList.add('active');
+
+            // Get the actual image dimensions
+            const imgWidth = modalImage.naturalWidth;
+            const imgHeight = modalImage.naturalHeight;
+
+            // Calculate position on the actual image (not the displayed size)
+            const imageX = (x / rect.width) * imgWidth;
+            const imageY = (y / rect.height) * imgHeight;
+
+            // Set magnifier background to the image with 2x zoom
+            magnifierBox.style.backgroundImage = `url('${modalImage.src}')`;
+            magnifierBox.style.backgroundSize = `${imgWidth * 2}px ${imgHeight * 2}px`;
+            
+            // Calculate the correct background position for 2x magnification
+            // The magnifier shows 2x zoom, so center it on the cursor position
+            const bgX = -(imageX * 2 - 100);
+            const bgY = -(imageY * 2 - 100);
+            
+            magnifierBox.style.backgroundPosition = `${bgX}px ${bgY}px`;
+
+            // Position magnifier box centered on cursor
+            magnifierBox.style.left = (e.clientX - 100) + 'px';
+            magnifierBox.style.top = (e.clientY - 100) + 'px';
+        }
+
+        // Close modal when clicking on dark background
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (!modal.classList.contains('active')) return;
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Close button listener
+        closeModalBtn.addEventListener('click', closeModal);
+
+        function setupMagnifier() {
+            modalImage.addEventListener('mousemove', showMagnifier);
+            modalImage.addEventListener('mouseenter', () => magnifierBox.classList.add('active'));
+            modalImage.addEventListener('mouseleave', () => magnifierBox.classList.remove('active'));
+        }
+
+        function showMagnifier(e) {
+            const rect = modalImage.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Only show magnifier if mouse is over the image
+            if (x < 0 || x > rect.width || y < 0 || y > rect.height) {
+                magnifierBox.classList.remove('active');
+                return;
+            }
+
+            magnifierBox.classList.add('active');
+
+            // Get the actual image dimensions
+            const imgWidth = modalImage.naturalWidth;
+            const imgHeight = modalImage.naturalHeight;
+
+            // Calculate position on the actual image (not the displayed size)
+            const imageX = (x / rect.width) * imgWidth;
+            const imageY = (y / rect.height) * imgHeight;
+
+            // Set magnifier background to the image with 2x zoom
+            magnifierBox.style.backgroundImage = `url('${modalImage.src}')`;
+            magnifierBox.style.backgroundSize = `${imgWidth * 2}px ${imgHeight * 2}px`;
+            
+            // Calculate the correct background position for 2x magnification
+            // The magnifier shows 2x zoom, so center it on the cursor position
+            const bgX = -(imageX * 2 - 100);
+            const bgY = -(imageY * 2 - 100);
+            
+            magnifierBox.style.backgroundPosition = `${bgX}px ${bgY}px`;
+
+            // Position magnifier box centered on cursor
+            magnifierBox.style.left = (e.clientX - 100) + 'px';
+            magnifierBox.style.top = (e.clientY - 100) + 'px';
+        }
+
         function loadGalleryFromGoogle() {
-            console.log("Running in LIVE mode (JSONP)");
+            console.log("Running in LIVE mode.");
             statusDisplay.innerText = "Loading images from Google Drive...";
-
-            const callbackName = 'driveGalleryCallback_' + Math.floor(Math.random() * 1e9);
-
-            // Create the global callback
-            window[callbackName] = function(imageIdsOrError) {
-                try {
-                    if (!imageIdsOrError) {
-                        statusDisplay.innerText = "No response or empty payload.";
-                        return;
-                    }
-                    if (Array.isArray(imageIdsOrError)) {
-                        const imageSources = imageIdsOrError.map(id => 'https://drive.usercontent.google.com/download?id=' + id + '&export=view&authuser=0');
-                        buildGallery(imageSources);
-                    } else if (imageIdsOrError.error) {
-                        console.error('Server error:', imageIdsOrError);
-                        statusDisplay.innerText = 'Server error: ' + (imageIdsOrError.error || 'unknown');
-                    } else {
-                        console.warn('Unexpected response format', imageIdsOrError);
-                        statusDisplay.innerText = 'Unexpected response format. Check console.';
-                    }
-                } finally {
-                    // cleanup
-                    try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
-                    const s = document.getElementById(callbackName + '_script'); if (s) s.remove();
-                }
-            };
-
-            // Inject script tag
-            const script = document.createElement('script');
-            script.id = callbackName + '_script';
-            script.src = WEB_APP_URL + (WEB_APP_URL.indexOf('?') === -1 ? '?' : '&') + 'callback=' + callbackName + '&_=' + Date.now();
-            script.onerror = function(e) {
-                console.error('Failed to load JSONP script', e);
-                statusDisplay.innerText = 'Failed to load gallery script. Check console.';
-                try { delete window[callbackName]; } catch (err) { window[callbackName] = undefined; }
-                script.remove();
-            };
-            document.body.appendChild(script);
+            
+            fetch(WEB_APP_URL)
+                .then(response => response.json())
+                .then(imageIds => {
+                    const imageSources = imageIds.map(id => 'https://drive.google.com/thumbnail?id=' + id.id + '&sz=w1000');
+                    buildGallery(imageSources);
+                })
+                .catch(error => {
+                    console.error('Error fetching gallery:', error);
+                    statusDisplay.innerText = "Error loading gallery. Check console for details.";
+                });
         }
 
         
